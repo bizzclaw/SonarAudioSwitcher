@@ -67,7 +67,7 @@ static void RenderSettingsUI(Config& editConfig, bool* startWithWindows, bool* s
     {
         float pollSeconds = static_cast<float>(editConfig.pollIntervalMs) / 1000.0f;
         ImGui::TextUnformatted("Polling Interval - Seconds between app detection refresh");
-        ImGui::SetNextItemWidth(120.0f);
+        ImGui::SetNextItemWidth(200.0f);
         if (ImGui::InputFloat("##PollInterval", &pollSeconds, 0.5f, 1.0f, "%.1f"))
         {
             if (pollSeconds < 0.5f)
@@ -112,7 +112,16 @@ static void RenderSettingsUI(Config& editConfig, bool* startWithWindows, bool* s
 
         // Card header: "Rule N" label + action buttons on the right
         ImGui::Text("Rule %d", i + 1);
-        ImGui::SameLine(ImGui::GetContentRegionAvail().x - 160.0f);
+
+        // Calculate right-aligned position for the three buttons
+        // SmallButton width = label width + 2 * frame padding
+        float framePadX = ImGui::GetStyle().FramePadding.x;
+        float itemSpacing = ImGui::GetStyle().ItemSpacing.x;
+        float upW      = ImGui::CalcTextSize("Up").x      + framePadX * 2.0f;
+        float downW    = ImGui::CalcTextSize("Down").x    + framePadX * 2.0f;
+        float removeW  = ImGui::CalcTextSize("Remove").x  + framePadX * 2.0f;
+        float totalButtonW = upW + itemSpacing + downW + itemSpacing + removeW;
+        ImGui::SameLine(ImGui::GetContentRegionAvail().x - totalButtonW);
 
         // Move Up
         ImGui::BeginDisabled(i == 0);
@@ -267,10 +276,10 @@ void showSettingsDialog(HINSTANCE hInstance, HWND parent, Config& config,
         EnableWindow(parent, FALSE);
     }
 
-    ShowWindow(hwnd, SW_SHOWDEFAULT);
-    UpdateWindow(hwnd);
-
-    // ---- Initialise DX11 ----
+    // ---- Initialise DX11 before showing the window ----
+    // ShowWindow is deliberately deferred until after DX11 is ready so that
+    // any WM_SIZE messages fired by the window becoming visible are handled
+    // with a valid swap chain, not a null one.
     if (!CreateDeviceD3D(hwnd))
     {
         CleanupDeviceD3D();
@@ -279,6 +288,9 @@ void showSettingsDialog(HINSTANCE hInstance, HWND parent, Config& config,
             EnableWindow(parent, parentWasEnabled);
         return;
     }
+
+    ShowWindow(hwnd, SW_SHOWDEFAULT);
+    UpdateWindow(hwnd);
 
     // ---- Initialise ImGui ----
     IMGUI_CHECKVERSION();
@@ -471,7 +483,7 @@ static LRESULT CALLBACK ImGuiWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM 
     switch (msg)
     {
     case WM_SIZE:
-        if (g_pd3dDevice && wParam != SIZE_MINIMIZED)
+        if (g_pd3dDevice && g_pSwapChain && wParam != SIZE_MINIMIZED)
         {
             CleanupRenderTarget();
             g_pSwapChain->ResizeBuffers(0,
