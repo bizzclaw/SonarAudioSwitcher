@@ -2,7 +2,7 @@
 
 A lightweight Windows system tray application that automatically switches [SteelSeries Sonar](https://steelseries.com/gg/sonar) audio devices based on which application is currently running.
 
-I made this because I like using Steelseries Sonar with VR, but I hated having to manually switch my audio output every time I swapped between VR and Desktop, but it can be used for any application, not just VR.
+I made this because I like using Steelseries Sonar with VR, but I hated having to manually switch my audio output every time I swapped between VR and Desktop, but it can be used for any application, not just VR. I also wanted to use Backup Device Switch, but it had a habbit of being buggy if device IDs or Names change and its arbitrarily disabled with streamer mode - which I prefer to use in general even though I'm not a stremer.
 
 Define rules like "when `vrserver.exe` is running, switch output to my VR headset" and SonarAudioSwitcher will monitor your running processes and call the Sonar API to change your audio routing automatically. When the application closes, it switches back to your configured default.
 
