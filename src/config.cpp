@@ -7,6 +7,7 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <shlobj.h>
 
 using json = nlohmann::json;
 
@@ -35,7 +36,29 @@ static json ruleToJson(const Rule& rule, bool includeExe)
 
 std::wstring getDefaultConfigPath()
 {
-    wchar_t exePath[MAX_PATH];
+    // Use %APPDATA%/SonarAudioSwitcher/config.json — always writable for the
+    // current user, unlike the exe directory which may be read-only.
+    wchar_t* appDataRaw = nullptr;
+    HRESULT result = SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, nullptr, &appDataRaw);
+    if (SUCCEEDED(result) && appDataRaw)
+    {
+        std::wstring configDir = std::wstring(appDataRaw) + L"\\SonarAudioSwitcher";
+        CoTaskMemFree(appDataRaw);
+
+        // Ensure the directory exists
+        CreateDirectoryW(configDir.c_str(), nullptr);
+
+        return configDir + L"\\config.json";
+    }
+
+    if (appDataRaw)
+    {
+        CoTaskMemFree(appDataRaw);
+    }
+
+    // Fallback: next to the executable (may fail if directory is read-only)
+    logMsg("Config: could not resolve %%APPDATA%%, falling back to exe directory");
+    wchar_t exePath[MAX_PATH]{};
     GetModuleFileNameW(nullptr, exePath, MAX_PATH);
 
     std::wstring path(exePath);

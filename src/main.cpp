@@ -23,29 +23,72 @@ static NOTIFYICONDATAW g_nid = {};
 static Config g_config = {};
 static Switcher g_switcher;
 
-static void updateTrayTooltip() {
-    std::string profile = g_switcher.getActiveProfile();
-    if (profile.empty())
-        profile = "Default";
+static void updateTrayIcon()
+{
+    WORD iconId = IDI_APP_ICON; // blue — paused (default)
 
-    std::wstring tip = L"Using Profile: ";
-    // Convert UTF-8 profile name to wide string
-    int len = MultiByteToWideChar(CP_UTF8, 0, profile.c_str(), -1, nullptr, 0);
-    if (len > 0) {
-        std::wstring wProfile(len - 1, L'\0');
-        MultiByteToWideChar(CP_UTF8, 0, profile.c_str(), -1, wProfile.data(), len);
-        tip += wProfile;
+    if (g_switcher.getSonarStatus() != SonarStatus::Connected)
+    {
+        iconId = IDI_APP_ICON_RED;
+    }
+    else if (!g_switcher.isPaused())
+    {
+        iconId = IDI_APP_ICON_GREEN;
+    }
+
+    HICON newIcon = LoadIconW(g_hInstance, MAKEINTRESOURCEW(iconId));
+    if (newIcon && newIcon != g_nid.hIcon)
+    {
+        g_nid.hIcon = newIcon;
+        Shell_NotifyIconW(NIM_MODIFY, &g_nid);
+    }
+}
+
+static void updateTrayTooltip()
+{
+    std::string activeRule = g_switcher.getActiveRule();
+    if (activeRule.empty())
+    {
+        activeRule = "Default";
+    }
+
+    std::wstring tip = L"Active Rule: ";
+    // Convert UTF-8 rule name to wide string
+    int len = MultiByteToWideChar(CP_UTF8, 0, activeRule.c_str(), -1, nullptr, 0);
+    if (len > 0)
+    {
+        std::wstring wRule(len - 1, L'\0');
+        MultiByteToWideChar(CP_UTF8, 0, activeRule.c_str(), -1, wRule.data(), len);
+        tip += wRule;
+    }
+
+    switch (g_switcher.getSonarStatus())
+    {
+    case SonarStatus::Connected:
+        tip += L"\nSonar: Connected";
+        break;
+    case SonarStatus::Connecting:
+        tip += L"\nSonar: Connecting...";
+        break;
+    case SonarStatus::Disconnected:
+        tip += L"\nSonar: Disconnected";
+        break;
     }
 
     // szTip is 128 wchars max
     wcsncpy_s(g_nid.szTip, tip.c_str(), _TRUNCATE);
     Shell_NotifyIconW(NIM_MODIFY, &g_nid);
+
+    updateTrayIcon();
 }
 
-static LRESULT CALLBACK wndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-    switch (msg) {
+static LRESULT CALLBACK wndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+    switch (msg)
+    {
     case WM_TRAY_ICON:
-        if (LOWORD(lParam) == WM_RBUTTONUP) {
+        if (LOWORD(lParam) == WM_RBUTTONUP)
+        {
             HMENU menu = CreatePopupMenu();
             AppendMenuW(menu, MF_STRING, IDM_OPEN_SETTINGS, L"Open Settings");
 
@@ -73,35 +116,31 @@ static LRESULT CALLBACK wndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
         return 0;
 
     case WM_COMMAND:
-        switch (LOWORD(wParam)) {
+        switch (LOWORD(wParam))
+        {
         case IDM_OPEN_SETTINGS:
-            showSettingsDialog(g_hInstance, hwnd, g_config, [](const Config& newConfig) {
+            showSettingsDialog(g_hInstance, hwnd, g_config, [](const Config& newConfig)
+            {
                 saveConfig(newConfig, getDefaultConfigPath());
                 g_switcher.reloadConfig(newConfig);
             });
             break;
         case IDM_TOGGLE_STARTUP:
-        {
-            bool currentlyEnabled = isStartupEnabled();
-            if (setStartupEnabled(!currentlyEnabled))
-                logMsg("Startup registration %s", currentlyEnabled ? "disabled" : "enabled");
-            else
-                logMsg("Failed to change startup registration");
-            break;
-        }
-        case IDM_TOGGLE_PAUSED:
-        {
-            bool nowPaused = !g_switcher.isPaused();
-            g_switcher.setPaused(nowPaused);
-            // Update tooltip to reflect paused state
-            if (nowPaused) {
-                wcscpy_s(g_nid.szTip, L"SonarAudioSwitcher (Paused)");
-                Shell_NotifyIconW(NIM_MODIFY, &g_nid);
-            } else {
-                updateTrayTooltip();
+            {
+                bool currentlyEnabled = isStartupEnabled();
+                if (setStartupEnabled(!currentlyEnabled))
+                    logMsg("Startup registration %s", currentlyEnabled ? "disabled" : "enabled");
+                else
+                    logMsg("Failed to change startup registration");
+                break;
             }
-            break;
-        }
+        case IDM_TOGGLE_PAUSED:
+            {
+                bool nowPaused = !g_switcher.isPaused();
+                g_switcher.setPaused(nowPaused);
+                updateTrayTooltip();
+                break;
+            }
         case IDM_EXIT:
             Shell_NotifyIconW(NIM_DELETE, &g_nid);
             PostQuitMessage(0);
@@ -120,17 +159,17 @@ static LRESULT CALLBACK wndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
         PostQuitMessage(0);
         return 0;
 
-    case WM_PROFILE_CHANGED:
-        // Switcher thread posted this — update the tray tooltip
-        if (!g_switcher.isPaused())
-            updateTrayTooltip();
+    case WM_RULE_CHANGED:
+        // Switcher rule changed — always update the tray tooltip, even while paused
+        updateTrayTooltip();
         return 0;
     }
 
     return DefWindowProcW(hwnd, msg, wParam, lParam);
 }
 
-static bool createTrayIcon(HWND hwnd, HINSTANCE hInstance) {
+static bool createTrayIcon(HWND hwnd, HINSTANCE hInstance)
+{
     g_nid.cbSize = sizeof(g_nid);
     g_nid.hWnd = hwnd;
     g_nid.uID = 1;
@@ -141,7 +180,8 @@ static bool createTrayIcon(HWND hwnd, HINSTANCE hInstance) {
     return Shell_NotifyIconW(NIM_ADD, &g_nid) != FALSE;
 }
 
-int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR lpCmdLine, int) {
+int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR lpCmdLine, int)
+{
     g_hInstance = hInstance;
 
     // ---- Check for --console flag ----
@@ -158,7 +198,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR lpCmdLine, int) {
     logInit(consoleMode);
     logMsg("SonarAudioSwitcher starting%s", consoleMode ? " (console mode)" : "");
 
-    INITCOMMONCONTROLSEX icc = { sizeof(icc), ICC_LISTVIEW_CLASSES };
+    INITCOMMONCONTROLSEX icc = {sizeof(icc), ICC_LISTVIEW_CLASSES};
     InitCommonControlsEx(&icc);
 
     WNDCLASSEXW wc = {};
@@ -197,11 +237,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR lpCmdLine, int) {
     g_switcher.setNotifyWindow(g_hwnd);
 
     // Set initial tooltip
-    wcscpy_s(g_nid.szTip, L"Using Profile: Default");
-    Shell_NotifyIconW(NIM_MODIFY, &g_nid);
+    updateTrayTooltip();
 
     MSG msg{};
-    while (GetMessageW(&msg, nullptr, 0, 0)) {
+    while (GetMessageW(&msg, nullptr, 0, 0))
+    {
         TranslateMessage(&msg);
         DispatchMessageW(&msg);
     }

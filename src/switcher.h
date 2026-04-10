@@ -11,6 +11,13 @@
 #include <thread>
 #include <string>
 
+enum class SonarStatus
+{
+    Disconnected,
+    Connecting,
+    Connected,
+};
+
 class Switcher {
 public:
     ~Switcher();
@@ -23,9 +30,11 @@ public:
     void setPaused(bool paused);
     bool isPaused() const;
 
-    // Returns the human-readable active profile name.
-    // Empty string means "Default".
-    std::string getActiveProfile() const;
+    // Returns the human-readable active rule name (exe name, or "Default").
+    std::string getActiveRule() const;
+
+    // Returns the current Sonar API connection status.
+    SonarStatus getSonarStatus() const;
 
     // Force re-apply the current matching rule immediately.
     void forceRefresh();
@@ -34,13 +43,13 @@ public:
     // Normal rule matching resumes when the user unpauses.
     void forceDefault();
 
-    // When set, the switcher posts WM_PROFILE_CHANGED to this HWND
-    // whenever the active profile changes.
+    // When set, the switcher posts WM_RULE_CHANGED to this HWND
+    // whenever the active rule changes.
     void setNotifyWindow(HWND hwnd);
 
 private:
     void run();
-    void applyRule(const Rule& rule);
+    void applyRule(const Rule& rule, const std::string& mode);
 
     Config config_;
     SonarClient client_;
@@ -51,6 +60,7 @@ private:
     std::atomic<bool> configDirty_{false};
     std::atomic<bool> paused_{false};
     std::atomic<bool> refreshRequested_{false};
+    std::atomic<SonarStatus> sonarStatus_{SonarStatus::Disconnected};
 
     HWND notifyHwnd_ = nullptr;
 
@@ -58,5 +68,5 @@ private:
     std::string lastAppliedExe_;       // exe name of the last applied rule ("" = default)
     std::string lastAppliedOutput_;
     std::string lastAppliedInput_;
-    std::string activeProfile_;        // current profile label shown in tooltip
+    std::string activeRule_;           // current rule label shown in tooltip
 };

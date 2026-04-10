@@ -14,16 +14,16 @@
 // ---------------------------------------------------------------------------
 //  DX11 state
 // ---------------------------------------------------------------------------
-static ID3D11Device*            g_pd3dDevice        = nullptr;
-static ID3D11DeviceContext*     g_pd3dDeviceContext  = nullptr;
-static IDXGISwapChain*          g_pSwapChain        = nullptr;
-static ID3D11RenderTargetView*  g_mainRenderTargetView = nullptr;
+static ID3D11Device* g_pd3dDevice = nullptr;
+static ID3D11DeviceContext* g_pd3dDeviceContext = nullptr;
+static IDXGISwapChain* g_pSwapChain = nullptr;
+static ID3D11RenderTargetView* g_mainRenderTargetView = nullptr;
 
 // Forward declarations
-static bool  CreateDeviceD3D(HWND hWnd);
-static void  CleanupDeviceD3D();
-static void  CreateRenderTarget();
-static void  CleanupRenderTarget();
+static bool CreateDeviceD3D(HWND hWnd);
+static void CleanupDeviceD3D();
+static void CreateRenderTarget();
+static void CleanupRenderTarget();
 static LRESULT CALLBACK ImGuiWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 // Forward declare the ImGui Win32 handler (defined in imgui_impl_win32.cpp)
@@ -35,7 +35,7 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 static void LabeledInput(const char* label, std::string* str)
 {
     ImGui::TextUnformatted(label);
-    ImGui::SetNextItemWidth(-1.0f);  // stretch to full available width
+    ImGui::SetNextItemWidth(-1.0f); // stretch to full available width
     // Use ## to hide the duplicate label from ImGui's ID but keep it unique
     char id[128];
     snprintf(id, sizeof(id), "##%s", label);
@@ -68,11 +68,14 @@ static void RenderSettingsUI(Config& editConfig, bool* startWithWindows, bool* s
         float pollSeconds = static_cast<float>(editConfig.pollIntervalMs) / 1000.0f;
         ImGui::TextUnformatted("Polling Interval - Seconds between app detection refresh");
         ImGui::SetNextItemWidth(120.0f);
-        if (ImGui::InputFloat("##PollInterval", &pollSeconds, 0.5f, 1.0f, "%.1f")) {
-            if (pollSeconds < 0.5f) {
+        if (ImGui::InputFloat("##PollInterval", &pollSeconds, 0.5f, 1.0f, "%.1f"))
+        {
+            if (pollSeconds < 0.5f)
+            {
                 pollSeconds = 0.5f;
             }
-            if (pollSeconds > 60.0f) {
+            if (pollSeconds > 60.0f)
+            {
                 pollSeconds = 60.0f;
             }
             editConfig.pollIntervalMs = static_cast<int>(pollSeconds * 1000.0f);
@@ -86,7 +89,7 @@ static void RenderSettingsUI(Config& editConfig, bool* startWithWindows, bool* s
     ImGui::PushID("default");
     {
         LabeledInput("Output Device", &editConfig.defaultRule.outputDevice);
-        LabeledInput("Input Device",  &editConfig.defaultRule.inputDevice);
+        LabeledInput("Input Device", &editConfig.defaultRule.inputDevice);
     }
     ImGui::PopID();
 
@@ -134,9 +137,9 @@ static void RenderSettingsUI(Config& editConfig, bool* startWithWindows, bool* s
         ImGui::SameLine();
 
         // Remove
-        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.7f, 0.2f, 0.2f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,  ImVec4(0.9f, 0.3f, 0.3f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive,   ImVec4(1.0f, 0.1f, 0.1f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.2f, 0.2f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.3f, 0.3f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 0.1f, 0.1f, 1.0f));
         if (ImGui::SmallButton("Remove"))
         {
             removeIdx = i;
@@ -145,9 +148,9 @@ static void RenderSettingsUI(Config& editConfig, bool* startWithWindows, bool* s
 
         // Card fields — labels above inputs
         ImGui::Checkbox("Enabled", &editConfig.rules[i].enabled);
-        LabeledInput("Exe Name",      &editConfig.rules[i].exeName);
+        LabeledInput("Exe Name", &editConfig.rules[i].exeName);
         LabeledInput("Output Device", &editConfig.rules[i].outputDevice);
-        LabeledInput("Input Device",  &editConfig.rules[i].inputDevice);
+        LabeledInput("Input Device", &editConfig.rules[i].inputDevice);
 
         ImGui::PopID();
 
@@ -188,7 +191,7 @@ static void RenderSettingsUI(Config& editConfig, bool* startWithWindows, bool* s
 
     if (ImGui::Button("Save", ImVec2(buttonW, 0)))
     {
-        *saved   = true;
+        *saved = true;
         *running = false;
     }
     ImGui::SameLine();
@@ -212,12 +215,12 @@ void showSettingsDialog(HINSTANCE hInstance, HWND parent, Config& config,
     if (!classRegistered)
     {
         WNDCLASSEXW wc = {};
-        wc.cbSize        = sizeof(wc);
-        wc.style         = CS_CLASSDC;
-        wc.lpfnWndProc   = ImGuiWndProc;
-        wc.hInstance     = hInstance;
+        wc.cbSize = sizeof(wc);
+        wc.style = CS_CLASSDC;
+        wc.lpfnWndProc = ImGuiWndProc;
+        wc.hInstance = hInstance;
         wc.lpszClassName = CLASS_NAME;
-        wc.hCursor       = LoadCursorW(nullptr, MAKEINTRESOURCEW(32512)); // IDC_ARROW
+        wc.hCursor = LoadCursorW(nullptr, MAKEINTRESOURCEW(32512)); // IDC_ARROW
         RegisterClassExW(&wc);
         classRegistered = true;
     }
@@ -281,7 +284,7 @@ void showSettingsDialog(HINSTANCE hInstance, HWND parent, Config& config,
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO();
-    io.IniFilename = nullptr;   // don't write imgui.ini
+    io.IniFilename = nullptr; // don't write imgui.ini
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
     ImGui::StyleColorsDark();
@@ -307,7 +310,7 @@ void showSettingsDialog(HINSTANCE hInstance, HWND parent, Config& config,
     // ---- Edit a copy of the config ----
     Config editConfig = config;
     bool startWithWindows = isStartupEnabled();
-    bool saved  = false;
+    bool saved = false;
     bool running = true;
 
     // ---- Modal render loop ----
@@ -344,7 +347,7 @@ void showSettingsDialog(HINSTANCE hInstance, HWND parent, Config& config,
 
         // ---- Render ----
         ImGui::Render();
-        const float clear_color[4] = { 0.10f, 0.10f, 0.10f, 1.00f };
+        const float clear_color[4] = {0.10f, 0.10f, 0.10f, 1.00f};
         g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, nullptr);
         g_pd3dDeviceContext->ClearRenderTargetView(g_mainRenderTargetView, clear_color);
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
@@ -384,19 +387,19 @@ void showSettingsDialog(HINSTANCE hInstance, HWND parent, Config& config,
 static bool CreateDeviceD3D(HWND hWnd)
 {
     DXGI_SWAP_CHAIN_DESC sd = {};
-    sd.BufferCount        = 2;
-    sd.BufferDesc.Width   = 0;
-    sd.BufferDesc.Height  = 0;
-    sd.BufferDesc.Format  = DXGI_FORMAT_R8G8B8A8_UNORM;
-    sd.BufferDesc.RefreshRate.Numerator   = 60;
+    sd.BufferCount = 2;
+    sd.BufferDesc.Width = 0;
+    sd.BufferDesc.Height = 0;
+    sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    sd.BufferDesc.RefreshRate.Numerator = 60;
     sd.BufferDesc.RefreshRate.Denominator = 1;
-    sd.Flags              = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
-    sd.BufferUsage        = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    sd.OutputWindow       = hWnd;
-    sd.SampleDesc.Count   = 1;
+    sd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
+    sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    sd.OutputWindow = hWnd;
+    sd.SampleDesc.Count = 1;
     sd.SampleDesc.Quality = 0;
-    sd.Windowed           = TRUE;
-    sd.SwapEffect         = DXGI_SWAP_EFFECT_DISCARD;
+    sd.Windowed = TRUE;
+    sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
 
     const D3D_FEATURE_LEVEL featureLevel = D3D_FEATURE_LEVEL_11_0;
     D3D_FEATURE_LEVEL obtainedLevel;
@@ -420,9 +423,21 @@ static bool CreateDeviceD3D(HWND hWnd)
 static void CleanupDeviceD3D()
 {
     CleanupRenderTarget();
-    if (g_pSwapChain)        { g_pSwapChain->Release();       g_pSwapChain = nullptr; }
-    if (g_pd3dDeviceContext)  { g_pd3dDeviceContext->Release(); g_pd3dDeviceContext = nullptr; }
-    if (g_pd3dDevice)         { g_pd3dDevice->Release();        g_pd3dDevice = nullptr; }
+    if (g_pSwapChain)
+    {
+        g_pSwapChain->Release();
+        g_pSwapChain = nullptr;
+    }
+    if (g_pd3dDeviceContext)
+    {
+        g_pd3dDeviceContext->Release();
+        g_pd3dDeviceContext = nullptr;
+    }
+    if (g_pd3dDevice)
+    {
+        g_pd3dDevice->Release();
+        g_pd3dDevice = nullptr;
+    }
 }
 
 static void CreateRenderTarget()
@@ -438,7 +453,11 @@ static void CreateRenderTarget()
 
 static void CleanupRenderTarget()
 {
-    if (g_mainRenderTargetView) { g_mainRenderTargetView->Release(); g_mainRenderTargetView = nullptr; }
+    if (g_mainRenderTargetView)
+    {
+        g_mainRenderTargetView->Release();
+        g_mainRenderTargetView = nullptr;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -456,9 +475,9 @@ static LRESULT CALLBACK ImGuiWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM 
         {
             CleanupRenderTarget();
             g_pSwapChain->ResizeBuffers(0,
-                static_cast<UINT>(LOWORD(lParam)),
-                static_cast<UINT>(HIWORD(lParam)),
-                DXGI_FORMAT_UNKNOWN, 0);
+                                        static_cast<UINT>(LOWORD(lParam)),
+                                        static_cast<UINT>(HIWORD(lParam)),
+                                        DXGI_FORMAT_UNKNOWN, 0);
             CreateRenderTarget();
         }
         return 0;
@@ -478,9 +497,3 @@ static LRESULT CALLBACK ImGuiWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM 
 
     return DefWindowProcW(hWnd, msg, wParam, lParam);
 }
-
-
-
-
-
-

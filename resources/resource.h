@@ -1,7 +1,9 @@
 #pragma once
 
-// Application icon
+// Application icons
 #define IDI_APP_ICON            101
+#define IDI_APP_ICON_GREEN      102
+#define IDI_APP_ICON_RED        103
 
 
 // Tray menu
@@ -14,4 +16,4 @@
 
 // Custom messages
 #define WM_TRAY_ICON            (WM_APP + 1)
-#define WM_PROFILE_CHANGED      (WM_APP + 2)
+#define WM_RULE_CHANGED         (WM_APP + 2)

@@ -36,6 +36,7 @@ target_link_libraries(SonarAudioSwitcher PRIVATE
     d3dcompiler
     dxgi
     dwmapi
+    ole32
 )
 
 # Embed the application manifest for common controls v6 and DPI awareness

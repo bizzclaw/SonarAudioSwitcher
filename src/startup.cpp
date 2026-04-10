@@ -5,7 +5,7 @@
 #include <windows.h>
 #include <string>
 
-static constexpr const wchar_t* STARTUP_REG_KEY  = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+static constexpr const wchar_t* STARTUP_REG_KEY = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 static constexpr const wchar_t* STARTUP_VAL_NAME = L"SonarAudioSwitcher";
 
 // Get the full path of the currently running executable (quoted for safety)
@@ -72,6 +72,3 @@ bool setStartupEnabled(bool enable)
     RegCloseKey(hKey);
     return success;
 }
-
-
-

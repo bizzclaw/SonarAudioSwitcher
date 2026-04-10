@@ -105,9 +105,9 @@ std::optional<std::string> SonarClient::querySonarWebServerAddress(const std::st
 
     // Disable SSL certificate verification (self-signed cert on localhost)
     DWORD securityFlags = SECURITY_FLAG_IGNORE_UNKNOWN_CA |
-                          SECURITY_FLAG_IGNORE_CERT_WRONG_USAGE |
-                          SECURITY_FLAG_IGNORE_CERT_CN_INVALID |
-                          SECURITY_FLAG_IGNORE_CERT_DATE_INVALID;
+        SECURITY_FLAG_IGNORE_CERT_WRONG_USAGE |
+        SECURITY_FLAG_IGNORE_CERT_CN_INVALID |
+        SECURITY_FLAG_IGNORE_CERT_DATE_INVALID;
     WinHttpSetOption(request, WINHTTP_OPTION_SECURITY_FLAGS, &securityFlags, sizeof(securityFlags));
 
     BOOL sendResult = WinHttpSendRequest(request, WINHTTP_NO_ADDITIONAL_HEADERS, 0,
@@ -386,4 +386,3 @@ bool SonarClient::setStreamMicDevice(const std::string& deviceId)
 
     return true;
 }
-

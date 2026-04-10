@@ -2,6 +2,7 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <shlobj.h>
 
 #include <cstdarg>
 #include <cstdio>
@@ -9,22 +10,41 @@
 #include <string>
 #include <mutex>
 
-static FILE*       g_logFile     = nullptr;
-static bool        g_consoleMode = false;
-static std::mutex  g_logMutex;
+static FILE* g_logFile = nullptr;
+static bool g_consoleMode = false;
+static std::mutex g_logMutex;
 
 // Max size before the log file is truncated on startup (~1 MB)
 static constexpr long MAX_LOG_SIZE = 1024 * 1024;
 
 static std::wstring getLogFilePath()
 {
-    wchar_t exePath[MAX_PATH] = {};
+    // Use %APPDATA%/SonarAudioSwitcher/ — same directory as config.json
+    wchar_t* appDataRaw = nullptr;
+    HRESULT result = SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, nullptr, &appDataRaw);
+    if (SUCCEEDED(result) && appDataRaw)
+    {
+        std::wstring logDir = std::wstring(appDataRaw) + L"\\SonarAudioSwitcher";
+        CoTaskMemFree(appDataRaw);
+        CreateDirectoryW(logDir.c_str(), nullptr);
+        return logDir + L"\\sonar_audio_switcher.log";
+    }
+
+    if (appDataRaw)
+    {
+        CoTaskMemFree(appDataRaw);
+    }
+
+    // Fallback: next to the executable
+    wchar_t exePath[MAX_PATH]{};
     GetModuleFileNameW(nullptr, exePath, MAX_PATH);
 
     std::wstring path(exePath);
     auto pos = path.find_last_of(L"\\/");
     if (pos != std::wstring::npos)
+    {
         path = path.substr(0, pos + 1);
+    }
 
     return path + L"sonar_audio_switcher.log";
 }
@@ -111,4 +131,3 @@ void logMsg(const char* fmt, ...)
         fputs(line, stdout);
     }
 }
-

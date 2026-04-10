@@ -1,6 +1,8 @@
 #include <windows.h>
 #include "resource.h"
 
-// Application icon
-IDI_APP_ICON ICON "app.ico"
+// Application icons
+IDI_APP_ICON       ICON "app.ico"
+IDI_APP_ICON_GREEN ICON "app_green.ico"
+IDI_APP_ICON_RED   ICON "app_red.ico"
 

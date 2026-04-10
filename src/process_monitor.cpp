@@ -11,12 +11,15 @@ struct SnapshotDeleter
 {
     void operator()(HANDLE handle) const
     {
-        if (handle != INVALID_HANDLE_VALUE)
+        if (handle == INVALID_HANDLE_VALUE)
         {
-            CloseHandle(handle);
+            return;
         }
+
+        CloseHandle(handle);
     }
 };
+
 using SnapshotHandle = std::unique_ptr<void, SnapshotDeleter>;
 
 static std::string toLower(const std::string& input)
@@ -58,7 +61,8 @@ std::set<std::string> getRunningProcesses()
         std::string exeName(length - 1, '\0');
         WideCharToMultiByte(CP_UTF8, 0, entry.szExeFile, -1, exeName.data(), length, nullptr, nullptr);
         processes.insert(toLower(exeName));
-    } while (Process32NextW(snapshot.get(), &entry));
+    }
+    while (Process32NextW(snapshot.get(), &entry));
 
     return processes;
 }

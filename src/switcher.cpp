@@ -63,7 +63,8 @@ void Switcher::setPaused(bool paused)
     logMsg("Switcher: %s", paused ? "paused" : "resumed");
 
     // On unpause, trigger an immediate refresh so rules are re-evaluated now
-    if (wasPaused && !paused) {
+    if (wasPaused && !paused)
+    {
         forceRefresh();
     }
 
@@ -76,10 +77,15 @@ bool Switcher::isPaused() const
     return paused_.load();
 }
 
-std::string Switcher::getActiveProfile() const
+std::string Switcher::getActiveRule() const
 {
     std::lock_guard<std::mutex> lock(mutex_);
-    return activeProfile_;
+    return activeRule_;
+}
+
+SonarStatus Switcher::getSonarStatus() const
+{
+    return sonarStatus_.load();
 }
 
 void Switcher::setNotifyWindow(HWND hwnd)
@@ -114,7 +120,20 @@ void Switcher::forceDefault()
 
     // Apply the default rule right now (this is called from the UI thread,
     // but applyRule only talks to Sonar via HTTP which is thread-safe).
-    applyRule(defaultRule);
+    auto mode = client_.getMode();
+    if (!mode.has_value())
+    {
+        logMsg("Switcher: forceDefault — could not reach Sonar, skipping apply");
+        sonarStatus_ = SonarStatus::Disconnected;
+        if (notifyHwnd_)
+        {
+            PostMessageW(notifyHwnd_, WM_RULE_CHANGED, 0, 0);
+        }
+    }
+    else
+    {
+        applyRule(defaultRule, mode.value());
+    }
 
     // Update bookkeeping so the switcher loop knows what's active
     {
@@ -122,10 +141,11 @@ void Switcher::forceDefault()
         lastAppliedExe_.clear();
         lastAppliedOutput_ = defaultRule.outputDevice;
         lastAppliedInput_ = defaultRule.inputDevice;
-        activeProfile_ = "Default";
+        activeRule_ = "Default";
 
-        if (notifyHwnd_) {
-            PostMessageW(notifyHwnd_, WM_PROFILE_CHANGED, 0, 0);
+        if (notifyHwnd_)
+        {
+            PostMessageW(notifyHwnd_, WM_RULE_CHANGED, 0, 0);
         }
     }
 
@@ -161,30 +181,59 @@ void Switcher::run()
         {
             std::unique_lock<std::mutex> lock(mutex_);
             cv_.wait_for(lock, std::chrono::milliseconds(currentConfig.pollIntervalMs),
-                         [this] { return !running_.load() || configDirty_.load()
-                                      || !paused_.load() || refreshRequested_.load(); });
+                         [this]
+                         {
+                             return !running_.load() || configDirty_.load()
+                                 || !paused_.load() || refreshRequested_.load();
+                         });
             continue;
         }
 
         // Ensure we're connected to Sonar
         if (!client_.isConnected())
         {
+            sonarStatus_ = SonarStatus::Connecting;
             logMsg("Switcher: attempting Sonar discovery...");
             if (!client_.discover())
             {
+                sonarStatus_ = SonarStatus::Disconnected;
                 logMsg("Switcher: Sonar not available, will retry");
+                // Wake the UI so the tooltip reflects Disconnected immediately
+                if (notifyHwnd_)
+                {
+                    PostMessageW(notifyHwnd_, WM_RULE_CHANGED, 0, 0);
+                }
                 // Wait before retrying discovery
                 std::unique_lock<std::mutex> lock(mutex_);
                 cv_.wait_for(lock, std::chrono::milliseconds(5000),
                              [this] { return !running_.load() || configDirty_.load(); });
                 continue;
             }
+            sonarStatus_ = SonarStatus::Connected;
+            if (notifyHwnd_)
+            {
+                PostMessageW(notifyHwnd_, WM_RULE_CHANGED, 0, 0);
+            }
         }
 
         // 1. Get running processes
         auto processes = getRunningProcesses();
 
-        // 2. Find the highest-priority matching rule (first match in list order)
+        // 2. Verify Sonar is still reachable — getMode() sets connected_ = false
+        //    internally if the call fails, so the next iteration will rediscover.
+        auto currentMode = client_.getMode();
+        if (!currentMode.has_value())
+        {
+            sonarStatus_ = SonarStatus::Disconnected;
+            logMsg("Switcher: lost connection to Sonar, will rediscover");
+            if (notifyHwnd_)
+            {
+                PostMessageW(notifyHwnd_, WM_RULE_CHANGED, 0, 0);
+            }
+            continue;
+        }
+
+        // 3. Find the highest-priority matching rule (first match in list order)
         const Rule* matchedRule = nullptr;
         for (const auto& rule : currentConfig.rules)
         {
@@ -221,8 +270,11 @@ void Switcher::run()
             // No change needed — wait for next tick
             std::unique_lock<std::mutex> lock(mutex_);
             cv_.wait_for(lock, std::chrono::milliseconds(currentConfig.pollIntervalMs),
-                         [this] { return !running_.load() || configDirty_.load()
-                                      || refreshRequested_.load(); });
+                         [this]
+                         {
+                             return !running_.load() || configDirty_.load()
+                                 || refreshRequested_.load();
+                         });
             continue;
         }
 
@@ -233,7 +285,7 @@ void Switcher::run()
                activeRule.inputDevice.c_str());
 
         // 4. Apply the rule
-        applyRule(activeRule);
+        applyRule(activeRule, currentMode.value());
 
         // Remember what we applied
         lastAppliedExe_ = activeExe;
@@ -243,22 +295,25 @@ void Switcher::run()
         // Update active profile name and notify UI
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            activeProfile_ = activeExe.empty() ? "Default" : activeExe;
+            activeRule_ = activeExe.empty() ? "Default" : activeExe;
             if (notifyHwnd_)
-                PostMessageW(notifyHwnd_, WM_PROFILE_CHANGED, 0, 0);
+                PostMessageW(notifyHwnd_, WM_RULE_CHANGED, 0, 0);
         }
 
         // Wait for next poll interval
         std::unique_lock<std::mutex> lock(mutex_);
         cv_.wait_for(lock, std::chrono::milliseconds(currentConfig.pollIntervalMs),
-                     [this] { return !running_.load() || configDirty_.load()
-                                  || refreshRequested_.load(); });
+                     [this]
+                     {
+                         return !running_.load() || configDirty_.load()
+                             || refreshRequested_.load();
+                     });
     }
 
     logMsg("Switcher: thread stopped");
 }
 
-void Switcher::applyRule(const Rule& rule)
+void Switcher::applyRule(const Rule& rule, const std::string& mode)
 {
     // Fetch audio devices from Sonar
     auto devices = client_.getAudioDevices();
@@ -268,16 +323,7 @@ void Switcher::applyRule(const Rule& rule)
         return;
     }
 
-    // Check current mode (classic vs stream)
-    auto mode = client_.getMode();
-    if (!mode.has_value())
-    {
-        logMsg("Switcher: could not get Sonar mode, attempting rediscovery");
-        client_.discover();
-        return;
-    }
-
-    logMsg("Switcher: mode is '%s', found %d audio devices", mode.value().c_str(), static_cast<int>(devices.size()));
+    logMsg("Switcher: mode is '%s', found %d audio devices", mode.c_str(), static_cast<int>(devices.size()));
 
     // Resolve output device
     if (!rule.outputDevice.empty())
@@ -286,7 +332,7 @@ void Switcher::applyRule(const Rule& rule)
         if (outputId.has_value())
         {
             logMsg("Switcher: resolved output \"%s\" -> %s", rule.outputDevice.c_str(), outputId.value().c_str());
-            if (mode.value() == "classic")
+            if (mode == "classic")
             {
                 client_.setClassicDevice("master", outputId.value());
             }
@@ -308,7 +354,7 @@ void Switcher::applyRule(const Rule& rule)
         auto inputId = findDeviceId(devices, rule.inputDevice, "capture");
         if (inputId.has_value())
         {
-            if (mode.value() == "classic")
+            if (mode == "classic")
             {
                 client_.setChatCaptureDevice(inputId.value());
             }
