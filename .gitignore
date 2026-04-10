@@ -1,0 +1,40 @@
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+_deps/
+
+# Visual Studio build artifacts
+*.vcxproj
+*.vcxproj.filters
+*.sln
+*.dir/
+Debug/
+Release/
+x64/
+*.suo
+*.user
+*.db
+*.opendb
+*.ipch
+
+# CMake meta-targets
+ALL_BUILD.vcxproj*
+ZERO_CHECK.vcxproj*
+
+# Build output
+*.exe
+*.obj
+*.pdb
+*.ilk
+*.iobj
+*.ipdb
+*.log
+
+# IDE
+.vs/
+.idea/
+*.swp
+
+# Old build directory (can be deleted)
+build/

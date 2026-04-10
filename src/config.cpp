@@ -1,0 +1,111 @@
+#include "config.h"
+#include "logger.h"
+
+#include <json.hpp>
+#include <fstream>
+#include <sstream>
+
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+
+using json = nlohmann::json;
+
+static Rule parseRule(const json& ruleJson)
+{
+    Rule rule{};
+    rule.enabled = ruleJson.value("enabled", true);
+    rule.exeName = ruleJson.value("exe", "");
+    rule.outputDevice = ruleJson.value("outputDevice", "");
+    rule.inputDevice = ruleJson.value("inputDevice", "");
+    return rule;
+}
+
+static json ruleToJson(const Rule& rule, bool includeExe)
+{
+    json ruleJson{};
+    if (includeExe)
+    {
+        ruleJson["enabled"] = rule.enabled;
+        ruleJson["exe"] = rule.exeName;
+    }
+    ruleJson["outputDevice"] = rule.outputDevice;
+    ruleJson["inputDevice"] = rule.inputDevice;
+    return ruleJson;
+}
+
+std::wstring getDefaultConfigPath()
+{
+    wchar_t exePath[MAX_PATH];
+    GetModuleFileNameW(nullptr, exePath, MAX_PATH);
+
+    std::wstring path(exePath);
+    auto pos = path.find_last_of(L"\\/");
+    if (pos != std::wstring::npos)
+    {
+        path = path.substr(0, pos + 1);
+    }
+
+    return path + L"config.json";
+}
+
+std::optional<Config> loadConfig(const std::wstring& path)
+{
+    std::ifstream file(path);
+    if (!file.is_open())
+    {
+        logMsg("Config: could not open config file");
+        return std::nullopt;
+    }
+
+    json configJson{};
+    try
+    {
+        file >> configJson;
+    }
+    catch (const json::parse_error& parseError)
+    {
+        logMsg("Config: parse error - %s", parseError.what());
+        return std::nullopt;
+    }
+
+    Config config{};
+    config.pollIntervalMs = configJson.value("pollIntervalMs", 2000);
+
+    if (configJson.contains("default"))
+    {
+        config.defaultRule = parseRule(configJson["default"]);
+    }
+
+    if (configJson.contains("rules") && configJson["rules"].is_array())
+    {
+        for (const auto& ruleJson : configJson["rules"])
+        {
+            config.rules.push_back(parseRule(ruleJson));
+        }
+    }
+
+    return config;
+}
+
+bool saveConfig(const Config& config, const std::wstring& path)
+{
+    json configJson{};
+    configJson["pollIntervalMs"] = config.pollIntervalMs;
+    configJson["default"] = ruleToJson(config.defaultRule, false);
+
+    configJson["rules"] = json::array();
+    for (const auto& rule : config.rules)
+    {
+        configJson["rules"].push_back(ruleToJson(rule, true));
+    }
+
+    std::ofstream file(path);
+    if (!file.is_open())
+    {
+        logMsg("Config: could not write config file");
+        return false;
+    }
+
+    file << configJson.dump(4) << std::endl;
+    return file.good();
+}

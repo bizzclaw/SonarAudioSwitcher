@@ -1,0 +1,230 @@
+// SonarAudioSwitcher — Settings Window
+// Declarative UI built with Slint
+
+import { Button, LineEdit, ListView, VerticalBox, HorizontalBox, GroupBox, ScrollView } from "std-widgets.slint";
+
+// Data model for a single rule
+export struct RuleData {
+    exe-name: string,
+    output-device: string,
+    input-device: string,
+}
+
+export component SettingsWindow inherits Window {
+    title: "SonarAudioSwitcher — Settings";
+    default-font-size: 14px;
+    min-width: 520px;
+    min-height: 480px;
+    preferred-width: 560px;
+    preferred-height: 640px;
+
+    // ── Properties bound from C++ ──
+    in-out property <string> default-output-device;
+    in-out property <string> default-input-device;
+    in-out property <[RuleData]> rules;
+
+    // ── Callbacks to C++ ──
+    callback save(string /* default-out */, string /* default-in */, [RuleData]);
+    callback cancel();
+    callback add-rule();
+    callback remove-rule(int /* index */);
+    callback move-rule-up(int /* index */);
+    callback move-rule-down(int /* index */);
+
+    VerticalBox {
+        padding: 16px;
+        spacing: 12px;
+
+        // ── Default device section ──
+        Rectangle {
+            border-color: #cccccc;
+            border-width: 1px;
+            border-radius: 6px;
+            background: #f7f7f7;
+            min-height: 110px;
+
+            VerticalBox {
+                padding: 14px;
+                spacing: 8px;
+
+                Text {
+                    text: "Default Devices";
+                    font-size: 15px;
+                    font-weight: 600;
+                    color: #333333;
+                }
+
+                HorizontalBox {
+                    spacing: 8px;
+                    alignment: stretch;
+                    Text {
+                        text: "Output:";
+                        vertical-alignment: center;
+                        min-width: 60px;
+                        color: #555555;
+                    }
+                    LineEdit {
+                        text <=> root.default-output-device;
+                        placeholder-text: "e.g. SteelSeries Sonar - Gaming";
+                    }
+                }
+                HorizontalBox {
+                    spacing: 8px;
+                    alignment: stretch;
+                    Text {
+                        text: "Input:";
+                        vertical-alignment: center;
+                        min-width: 60px;
+                        color: #555555;
+                    }
+                    LineEdit {
+                        text <=> root.default-input-device;
+                        placeholder-text: "e.g. Microphone (Realtek)";
+                    }
+                }
+            }
+        }
+
+        // ── Rules header ──
+        HorizontalBox {
+            spacing: 8px;
+            alignment: stretch;
+            Text {
+                text: "Rules";
+                font-size: 15px;
+                font-weight: 600;
+                color: #333333;
+                vertical-alignment: center;
+            }
+            Rectangle { }  // spacer
+            Button {
+                text: "+ Add Rule";
+                clicked => { root.add-rule(); }
+            }
+        }
+
+        // ── Scrollable rule list ──
+        ScrollView {
+            vertical-stretch: 1;
+
+            VerticalBox {
+                spacing: 10px;
+                alignment: start;
+
+                for rule[index] in root.rules : Rectangle {
+                    border-color: #cccccc;
+                    border-width: 1px;
+                    border-radius: 6px;
+                    background: #fafafa;
+                    min-height: 170px;
+
+                    VerticalBox {
+                        padding: 12px;
+                        spacing: 6px;
+
+                        // Title row
+                        HorizontalBox {
+                            spacing: 8px;
+                            alignment: stretch;
+                            Text {
+                                text: "Rule \{index + 1}";
+                                font-size: 13px;
+                                font-weight: 600;
+                                color: #444444;
+                                vertical-alignment: center;
+                            }
+                            Rectangle { }  // spacer
+                            Button {
+                                text: "▲";
+                                enabled: index > 0;
+                                clicked => { root.move-rule-up(index); }
+                            }
+                            Button {
+                                text: "▼";
+                                enabled: index < root.rules.length - 1;
+                                clicked => { root.move-rule-down(index); }
+                            }
+                            Button {
+                                text: "✕";
+                                clicked => { root.remove-rule(index); }
+                            }
+                        }
+
+                        // Exe name
+                        HorizontalBox {
+                            spacing: 8px;
+                            alignment: stretch;
+                            Text {
+                                text: "Exe:";
+                                vertical-alignment: center;
+                                min-width: 60px;
+                                color: #555555;
+                            }
+                            le-exe := LineEdit {
+                                text: rule.exe-name;
+                                placeholder-text: "e.g. game.exe";
+                                edited => {
+                                    rule.exe-name = self.text;
+                                }
+                            }
+                        }
+
+                        // Output device
+                        HorizontalBox {
+                            spacing: 8px;
+                            alignment: stretch;
+                            Text {
+                                text: "Output:";
+                                vertical-alignment: center;
+                                min-width: 60px;
+                                color: #555555;
+                            }
+                            le-out := LineEdit {
+                                text: rule.output-device;
+                                placeholder-text: "Output device name";
+                                edited => {
+                                    rule.output-device = self.text;
+                                }
+                            }
+                        }
+
+                        // Input device
+                        HorizontalBox {
+                            spacing: 8px;
+                            alignment: stretch;
+                            Text {
+                                text: "Input:";
+                                vertical-alignment: center;
+                                min-width: 60px;
+                                color: #555555;
+                            }
+                            le-in := LineEdit {
+                                text: rule.input-device;
+                                placeholder-text: "Input device name";
+                                edited => {
+                                    rule.input-device = self.text;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Bottom buttons ──
+        HorizontalBox {
+            spacing: 8px;
+            alignment: end;
+
+            Button {
+                text: "Save";
+                clicked => { root.save(root.default-output-device, root.default-input-device, root.rules); }
+            }
+            Button {
+                text: "Cancel";
+                clicked => { root.cancel(); }
+            }
+        }
+    }
+}
+
