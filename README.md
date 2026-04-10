@@ -65,7 +65,7 @@ An [Inno Setup 6.7](https://jrsoftware.org/isinfo.php) script is provided in `in
 iscc.exe installer/installer.iss
 ```
 
-The installer will be output to `build/installer/SonarAudioSwitcher_Setup.exe`.
+The installer will be output to `Release/SonarAudioSwitcher_Setup.exe`.
 
 ## Credits
 
