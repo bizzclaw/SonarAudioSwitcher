@@ -30,6 +30,8 @@ Define rules like "when `vrserver.exe` is running, switch output to my VR headse
 - Rules are evaluated top-to-bottom; the **first matching rule wins**. Use the Up/Down buttons to set priority order.
 - Click **Save** — the switcher applies the new config immediately from the system tray.
 
+<img width="612" height="744" alt="SonarAudioSwitcher_novfv5rfdq" src="https://github.com/user-attachments/assets/9c1dfae5-978e-41ec-aea0-87a8b6a51059" />
+
 ## Building Locally
 
 ### Prerequisites
