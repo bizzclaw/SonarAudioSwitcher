@@ -334,7 +334,17 @@ void Switcher::applyRule(const Rule& rule, const std::string& mode)
             logMsg("Switcher: resolved output \"%s\" -> %s", rule.outputDevice.c_str(), outputId.value().c_str());
             if (mode == "classic")
             {
-                client_.setClassicDevice("master", outputId.value());
+                // Classic mode has separate channels — set them all
+                static const char* renderChannels[] = {
+                    "master", "game", "chatRender", "media", "aux"
+                };
+                for (const auto* channel : renderChannels)
+                {
+                    if (!client_.setClassicDevice(channel, outputId.value()))
+                    {
+                        logMsg("Switcher: failed to set classic channel '%s'", channel);
+                    }
+                }
             }
             else
             {

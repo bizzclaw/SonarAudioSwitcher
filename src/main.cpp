@@ -91,19 +91,15 @@ static LRESULT CALLBACK wndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
         {
             HMENU menu = CreatePopupMenu();
             AppendMenuW(menu, MF_STRING, IDM_OPEN_SETTINGS, L"Open Settings");
+            AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
 
-            // "Start with Windows" — checked if currently registered
-            UINT startupFlags = MF_STRING | (isStartupEnabled() ? MF_CHECKED : MF_UNCHECKED);
-            AppendMenuW(menu, startupFlags, IDM_TOGGLE_STARTUP, L"Start with Windows");
-
-            // "Paused" — checked if currently paused
             UINT pausedFlags = MF_STRING | (g_switcher.isPaused() ? MF_CHECKED : MF_UNCHECKED);
-            AppendMenuW(menu, pausedFlags, IDM_TOGGLE_PAUSED, L"Paused");
+            AppendMenuW(menu, pausedFlags, IDM_TOGGLE_PAUSED, L"Pause");
+            AppendMenuW(menu, MF_STRING, IDM_RESET_DEFAULT, L"Pause + Force Default");
 
             AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-            AppendMenuW(menu, MF_STRING, IDM_REFRESH, L"Refresh");
-            AppendMenuW(menu, MF_STRING, IDM_RESET_DEFAULT, L"Reset to Default");
 
+            AppendMenuW(menu, MF_STRING, IDM_REFRESH, L"Refresh");
             AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
             AppendMenuW(menu, MF_STRING, IDM_EXIT, L"Exit");
 
@@ -125,31 +121,21 @@ static LRESULT CALLBACK wndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                 g_switcher.reloadConfig(newConfig);
             });
             break;
-        case IDM_TOGGLE_STARTUP:
-            {
-                bool currentlyEnabled = isStartupEnabled();
-                if (setStartupEnabled(!currentlyEnabled))
-                    logMsg("Startup registration %s", currentlyEnabled ? "disabled" : "enabled");
-                else
-                    logMsg("Failed to change startup registration");
-                break;
-            }
         case IDM_TOGGLE_PAUSED:
             {
-                bool nowPaused = !g_switcher.isPaused();
-                g_switcher.setPaused(nowPaused);
+                g_switcher.setPaused(!g_switcher.isPaused());
                 updateTrayTooltip();
                 break;
             }
-        case IDM_EXIT:
-            Shell_NotifyIconW(NIM_DELETE, &g_nid);
-            PostQuitMessage(0);
+        case IDM_RESET_DEFAULT:
+            g_switcher.forceDefault();
             break;
         case IDM_REFRESH:
             g_switcher.forceRefresh();
             break;
-        case IDM_RESET_DEFAULT:
-            g_switcher.forceDefault();
+        case IDM_EXIT:
+            Shell_NotifyIconW(NIM_DELETE, &g_nid);
+            PostQuitMessage(0);
             break;
         }
         return 0;
