@@ -11,11 +11,32 @@
 
 using json = nlohmann::json;
 
+static RuleType parseRuleType(const std::string& typeStr)
+{
+    return typeStr == "device"
+               ? RuleType::Device
+               : RuleType::Application; // Default to Application
+}
+
+static const char* ruleTypeToString(RuleType type)
+{
+    switch (type)
+    {
+    case RuleType::Device:
+        return "device";
+    case RuleType::Application:
+    default:
+        return "application";
+    }
+}
+
 static Rule parseRule(const json& ruleJson)
 {
     Rule rule{};
     rule.enabled = ruleJson.value("enabled", true);
+    rule.type = parseRuleType(ruleJson.value("type", "application"));
     rule.exeName = ruleJson.value("exe", "");
+    rule.deviceNameMatch = ruleJson.value("deviceNameMatch", "");
     rule.outputDevice = ruleJson.value("outputDevice", "");
     rule.inputDevice = ruleJson.value("inputDevice", "");
     return rule;
@@ -27,7 +48,9 @@ static json ruleToJson(const Rule& rule, bool includeExe)
     if (includeExe)
     {
         ruleJson["enabled"] = rule.enabled;
+        ruleJson["type"] = ruleTypeToString(rule.type);
         ruleJson["exe"] = rule.exeName;
+        ruleJson["deviceNameMatch"] = rule.deviceNameMatch;
     }
     ruleJson["outputDevice"] = rule.outputDevice;
     ruleJson["inputDevice"] = rule.inputDevice;

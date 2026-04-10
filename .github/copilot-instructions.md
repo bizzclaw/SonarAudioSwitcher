@@ -9,12 +9,16 @@ Read `PLAN.md` at the project root for the full architecture, API reference, pro
 ## Project Context
 
 - **Language:** C++17, compiled with MSVC
-- **Build system:** CMake 3.20+
-- **UI:** Raw Win32 API (Shell_NotifyIcon, DialogBox, ListView) — no framework
-- **HTTP:** `cpp-httplib` (vendored single header in `vendor/`)
+- **Build system:** CMake 3.20+ (generates the `.sln` into the project root, not a subdirectory)
+- **UI:**
+  - **Tray icon + context menu:** raw Win32 (`Shell_NotifyIcon`, `TrackPopupMenu`) — handled in `main.cpp`
+  - **Settings window:** Dear ImGui with the Win32 + DirectX 11 backend, vendored under `vendor/imgui/` and implemented in `imgui_settings_window.cpp`. Created on demand when the user opens settings; fully destroyed on close (no render cost while hidden).
+- **HTTP:** `cpp-httplib` (vendored single header in `vendor/`) for plain HTTP Sonar calls; **WinHTTP** for the single HTTPS discovery call (to avoid an OpenSSL dependency on self-signed certs)
 - **JSON:** `nlohmann/json` (vendored single header in `vendor/`)
 - **Process monitoring:** `CreateToolhelp32Snapshot` polling (no WMI, no ETW)
+- **Logging:** `logger.h` — file log under `%APPDATA%\SonarAudioSwitcher\` plus `OutputDebugStringA`; use `logMsg("fmt %s", ...)` rather than raw `OutputDebugStringA` so output shows up in both sinks
 - **Target:** Windows 10/11 only, x64, no admin elevation required
+- **Secondary target:** `SonarDiag.exe` — a small console tool built from `src/diag.cpp` for testing Sonar API connectivity without launching the tray app
 
 ---
 
@@ -163,16 +167,18 @@ MSG msg{};
 ## Testing
 
 - Unit-testable components (`config`, `device_matcher`, rule matching in `switcher`) should be pure functions with no Win32 or network dependencies.
-- Use `--console` flag to run in console mode for debugging (allocates a console window, prints poll ticks and API calls).
+- Run `SonarAudioSwitcher.exe --console` to allocate a console window alongside the tray — logs stream to it in real time alongside the file log.
+- Run the standalone `SonarDiag.exe` to test Sonar discovery / API connectivity in isolation, without launching the tray app or touching the live switcher state.
 - When writing new components, keep the testable logic separate from the Win32/network plumbing so it can be tested independently.
 
 ---
 
 ## What NOT To Do
 
-- Do not add third-party GUI frameworks (Qt, wxWidgets, Dear ImGui). The Win32 API is sufficient.
+- Do not add additional third-party GUI frameworks (Qt, wxWidgets, etc.). The tray surface is raw Win32 and the settings window is Dear ImGui (Win32 + DX11) — don't introduce a third one.
 - Do not use WMI or ETW for process monitoring. Polling with `CreateToolhelp32Snapshot` is the deliberate choice.
 - Do not store or match devices by Windows device ID — always resolve by partial name match at runtime.
-- Do not touch the streaming audio route in streamer mode.
+- Do not touch the streaming audio route in streamer mode — only `monitoring` (output) and `chatCapture` / `streamMic` (input).
 - Do not add features beyond what PLAN.md specifies without discussion.
 - Do not add speculative abstractions, excessive comments, or unnecessary wrapper layers.
+- Do not add OpenSSL or link `cpp-httplib`'s HTTPS support — WinHTTP handles the single HTTPS call to Sonar's discovery endpoint.

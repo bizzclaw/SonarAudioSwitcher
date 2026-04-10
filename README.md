@@ -8,7 +8,10 @@ Define rules like "when `vrserver.exe` is running, switch output to my VR headse
 
 ## Features
 
-- **Automatic switching** — polls running processes and applies the first matching rule.
+- **Automatic switching** — polls running processes and connected audio devices, then applies the first matching rule.
+- **Application rules** — trigger a switch when a specific executable (e.g. `vrserver.exe`) is running.
+- **Device rules** — trigger a switch when a specific audio device (e.g. a Bluetooth headset or USB dongle) is connected and visible to Sonar.
+- **Partial name matching** — all device fields use partial, case-insensitive matching so rules survive device ID changes, driver reinstalls, and Windows renaming things randomly.
 - **Classic & Streamer mode** — works with both Sonar modes. In streamer mode, only the monitoring output and mic input are changed; the stream mix is never touched.
 - **System tray** — runs quietly in the background with a tray icon for quick access.
 - **Pause / Resume** — temporarily disable rule matching without closing the app.
@@ -17,9 +20,15 @@ Define rules like "when `vrserver.exe` is running, switch output to my VR headse
 ## Usage
 - Build locally or Download and run the Installer from the Releases page.
 - Open the settings window from the system tray icon.
-- Set your default output and mic devices (the ones you want when no rules are active) - Note that instead of a dropdown, you enter partial match for the device name, I did this because setting the device ID directly is unreliable as it may change over time or when other decices are added.
-- Add a rule and set the exact executable name (e.g. `vrserver.exe`) and the output/mic you want to switch to when that app is running using partial matches for the device names as well.
-- Click "Save" and the app will run from your System Tray.
+- Set your **default** output and input devices — these are applied whenever no rule is active. Both fields use partial name matching (e.g. `"Arctis"` will match `"Headphones (Arctis Nova Pro Wireless)"`).
+- Add rules to define when a different audio profile should be active. Each rule has:
+  - **Rule Type** — choose one of:
+    - **Application** — activates while a specific executable is running. Enter the exact process name in the *Application Executable Name Exact Match* field (e.g. `vrserver.exe`).
+    - **Device** — activates while a specific audio device is connected and visible to Sonar. Enter a partial device name in the *Device Name Partial Match* field (e.g. `P10 Dongle` or `Quest`).
+  - **Output Device Partial Match** — the Sonar output device to switch to when this rule is active.
+  - **Input Device Partial Match** — the Sonar input device to switch to when this rule is active.
+- Rules are evaluated top-to-bottom; the **first matching rule wins**. Use the Up/Down buttons to set priority order.
+- Click **Save** — the switcher applies the new config immediately from the system tray.
 
 ## Building Locally
 

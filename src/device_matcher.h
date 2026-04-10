@@ -10,3 +10,9 @@ std::optional<std::string> findDeviceId(
     const std::string& partialName,
     const std::string& type
 );
+
+bool isAudioDevicePresent(
+    const std::vector<AudioDevice>& devices,
+    const std::string& partialName
+);
+

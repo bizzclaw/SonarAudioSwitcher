@@ -1,5 +1,6 @@
 #include "imgui_settings_window.h"
 #include "startup.h"
+#include "resource.h"
 
 #include "imgui.h"
 #include "imgui_impl_win32.h"
@@ -88,8 +89,8 @@ static void RenderSettingsUI(Config& editConfig, bool* startWithWindows, bool* s
     ImGui::SeparatorText("Default Rule");
     ImGui::PushID("default");
     {
-        LabeledInput("Output Device", &editConfig.defaultRule.outputDevice);
-        LabeledInput("Input Device", &editConfig.defaultRule.inputDevice);
+        LabeledInput("Output Device Partial Match", &editConfig.defaultRule.outputDevice);
+        LabeledInput("Input Device Partial Match", &editConfig.defaultRule.inputDevice);
     }
     ImGui::PopID();
 
@@ -97,6 +98,9 @@ static void RenderSettingsUI(Config& editConfig, bool* startWithWindows, bool* s
 
     // ---- Rules list ----
     ImGui::SeparatorText("Rules (higher = higher priority)");
+    ImGui::TextWrapped(
+        "Rules look for a specific state and will then select an audio device based on partial matches — we use partial matches because device IDs and full names like to change randomly.");
+    ImGui::Spacing();
 
     // Reserve space at the bottom for Add Rule + Save/Cancel buttons
     float bottomHeight = ImGui::GetFrameHeightWithSpacing() * 2 + ImGui::GetStyle().ItemSpacing.y * 2 + 8.0f;
@@ -117,9 +121,9 @@ static void RenderSettingsUI(Config& editConfig, bool* startWithWindows, bool* s
         // SmallButton width = label width + 2 * frame padding
         float framePadX = ImGui::GetStyle().FramePadding.x;
         float itemSpacing = ImGui::GetStyle().ItemSpacing.x;
-        float upW      = ImGui::CalcTextSize("Up").x      + framePadX * 2.0f;
-        float downW    = ImGui::CalcTextSize("Down").x    + framePadX * 2.0f;
-        float removeW  = ImGui::CalcTextSize("Remove").x  + framePadX * 2.0f;
+        float upW = ImGui::CalcTextSize("Up").x + framePadX * 2.0f;
+        float downW = ImGui::CalcTextSize("Down").x + framePadX * 2.0f;
+        float removeW = ImGui::CalcTextSize("Remove").x + framePadX * 2.0f;
         float totalButtonW = upW + itemSpacing + downW + itemSpacing + removeW;
         ImGui::SameLine(ImGui::GetContentRegionAvail().x - totalButtonW);
 
@@ -157,9 +161,33 @@ static void RenderSettingsUI(Config& editConfig, bool* startWithWindows, bool* s
 
         // Card fields — labels above inputs
         ImGui::Checkbox("Enabled", &editConfig.rules[i].enabled);
-        LabeledInput("Exe Name", &editConfig.rules[i].exeName);
-        LabeledInput("Output Device", &editConfig.rules[i].outputDevice);
-        LabeledInput("Input Device", &editConfig.rules[i].inputDevice);
+
+        // Rule type dropdown
+        ImGui::TextUnformatted("Rule Type");
+        ImGui::SetNextItemWidth(-1.0f);
+        {
+            static const char* ruleTypeLabels[] = {"Application", "Device"};
+            int currentType = static_cast<int>(editConfig.rules[i].type);
+            char comboId[64]{};
+            snprintf(comboId, sizeof(comboId), "##RuleType%d", i);
+            if (ImGui::Combo(comboId, &currentType, ruleTypeLabels, IM_ARRAYSIZE(ruleTypeLabels)))
+            {
+                editConfig.rules[i].type = static_cast<RuleType>(currentType);
+            }
+        }
+
+        // Show matching input based on rule type
+        if (editConfig.rules[i].type == RuleType::Application)
+        {
+            LabeledInput("Application Executable Name Exact Match", &editConfig.rules[i].exeName);
+        }
+        else
+        {
+            LabeledInput("Device Name Partial Match", &editConfig.rules[i].deviceNameMatch);
+        }
+
+        LabeledInput("Output Device Partial Match", &editConfig.rules[i].outputDevice);
+        LabeledInput("Input Device Partial Match", &editConfig.rules[i].inputDevice);
 
         ImGui::PopID();
 
@@ -218,6 +246,12 @@ static void RenderSettingsUI(Config& editConfig, bool* startWithWindows, bool* s
 void showSettingsDialog(HINSTANCE hInstance, HWND parent, Config& config,
                         SettingsSaveCallback onSave)
 {
+    static bool dialogOpen = false;
+    if (dialogOpen)
+    {
+        return;
+    }
+    dialogOpen = true;
     // ---- Register a window class for the settings window ----
     static const wchar_t* CLASS_NAME = L"SonarImGuiSettings";
     static bool classRegistered = false;
@@ -247,7 +281,7 @@ void showSettingsDialog(HINSTANCE hInstance, HWND parent, Config& config,
 
     // ---- Create the settings window ----
     // Scale base window size by DPI
-    int baseW = 620, baseH = 520;
+    int baseW = 620, baseH = 720;
     int winW = static_cast<int>(baseW * dpiScale);
     int winH = static_cast<int>(baseH * dpiScale);
     int screenW = GetSystemMetrics(SM_CXSCREEN);
@@ -256,13 +290,24 @@ void showSettingsDialog(HINSTANCE hInstance, HWND parent, Config& config,
     int posY = (screenH - winH) / 2;
 
     HWND hwnd = CreateWindowExW(
-        0, CLASS_NAME, L"SonarAudioSwitcher - Settings",
+        WS_EX_APPWINDOW, CLASS_NAME, L"SonarAudioSwitcher - Settings",
         WS_OVERLAPPEDWINDOW & ~WS_MAXIMIZEBOX,
         posX, posY, winW, winH,
-        parent, nullptr, hInstance, nullptr);
+        nullptr, nullptr, hInstance, nullptr);
 
     if (!hwnd)
+    {
+        dialogOpen = false;
         return;
+    }
+
+    // Set the window icon (same icon used by the tray)
+    HICON appIcon = LoadIconW(hInstance, MAKEINTRESOURCEW(IDI_APP_ICON));
+    if (appIcon)
+    {
+        SendMessageW(hwnd, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(appIcon));
+        SendMessageW(hwnd, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(appIcon));
+    }
 
     // Refine DPI scale with the actual window handle
     dpiScale = ImGui_ImplWin32_GetDpiScaleForHwnd(hwnd);
@@ -383,7 +428,12 @@ void showSettingsDialog(HINSTANCE hInstance, HWND parent, Config& config,
     ImGui::DestroyContext();
 
     CleanupDeviceD3D();
-    DestroyWindow(hwnd);
+
+    // Only destroy if the window wasn't already destroyed by WM_CLOSE
+    if (IsWindow(hwnd))
+    {
+        DestroyWindow(hwnd);
+    }
 
     // Re-enable parent
     if (parent && IsWindow(parent))
@@ -391,6 +441,8 @@ void showSettingsDialog(HINSTANCE hInstance, HWND parent, Config& config,
         EnableWindow(parent, parentWasEnabled);
         SetForegroundWindow(parent);
     }
+
+    dialogOpen = false;
 }
 
 // ---------------------------------------------------------------------------
@@ -495,9 +547,7 @@ static LRESULT CALLBACK ImGuiWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM 
         return 0;
 
     case WM_CLOSE:
-        // Don't call DestroyWindow here — the modal loop checks IsWindow()
-        // and will exit cleanly. We just hide the window.
-        ShowWindow(hWnd, SW_HIDE);
+        DestroyWindow(hWnd);
         return 0;
 
     case WM_DESTROY:

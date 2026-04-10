@@ -7,7 +7,7 @@
 ;      iscc.exe installer\installer.iss
 
 #define AppName "SonarAudioSwitcher"
-#define AppVersion "1.0.1"
+#define AppVersion "1.1.0"
 #define AppPublisher "SonarAudioSwitcher"
 #define AppExeName "SonarAudioSwitcher.exe"
 
@@ -19,7 +19,7 @@ AppPublisher={#AppPublisher}
 DefaultDirName={autopf}\{#AppName}
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
-OutputDir=..\installer
+OutputDir=..\Release
 OutputBaseFilename=SonarAudioSwitcher_Setup
 SetupIconFile=..\resources\app.ico
 Compression=lzma2

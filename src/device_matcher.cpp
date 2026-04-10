@@ -39,3 +39,26 @@ std::optional<std::string> findDeviceId(
 
     return std::nullopt;
 }
+
+bool isAudioDevicePresent(
+    const std::vector<AudioDevice>& devices,
+    const std::string& partialName)
+{
+    if (partialName.empty())
+    {
+        return false;
+    }
+
+    std::string lowerPartial = toLowerStr(partialName);
+
+    for (const auto& device : devices)
+    {
+        std::string lowerName = toLowerStr(device.name);
+        if (lowerName.find(lowerPartial) != std::string::npos)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}

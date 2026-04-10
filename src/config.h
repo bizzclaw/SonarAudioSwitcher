@@ -4,9 +4,16 @@
 #include <vector>
 #include <optional>
 
+enum class RuleType {
+    Application = 0,
+    Device = 1
+};
+
 struct Rule {
     bool enabled = true;
+    RuleType type = RuleType::Application;
     std::string exeName;
+    std::string deviceNameMatch;
     std::string outputDevice;
     std::string inputDevice;
 };

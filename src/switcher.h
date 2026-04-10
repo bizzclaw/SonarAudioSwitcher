@@ -50,6 +50,8 @@ public:
 private:
     void run();
     void applyRule(const Rule& rule, const std::string& mode);
+    void applyOutputDevice(const std::vector<AudioDevice>& devices, const std::string& outputDeviceName, const std::string& mode);
+    void applyInputDevice(const std::vector<AudioDevice>& devices, const std::string& inputDeviceName, const std::string& mode);
 
     Config config_;
     SonarClient client_;
@@ -65,7 +67,7 @@ private:
     HWND notifyHwnd_ = nullptr;
 
     std::thread thread_;
-    std::string lastAppliedExe_;       // exe name of the last applied rule ("" = default)
+    int lastAppliedRuleIdx_ = -1;      // index into config_.rules, -1 = default
     std::string lastAppliedOutput_;
     std::string lastAppliedInput_;
     std::string activeRule_;           // current rule label shown in tooltip

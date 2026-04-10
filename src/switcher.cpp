@@ -10,6 +10,31 @@
 #include <algorithm>
 #include <chrono>
 
+// ---------------------------------------------------------------------------
+//  Checks whether a rule's trigger condition is currently satisfied.
+// ---------------------------------------------------------------------------
+static bool isRuleActive(const Rule& rule,
+                         const std::set<std::string>& processes,
+                         const std::vector<AudioDevice>& devices)
+{
+    switch (rule.type)
+    {
+    case RuleType::Application:
+        {
+            std::string lowerExe = rule.exeName;
+            std::transform(lowerExe.begin(), lowerExe.end(), lowerExe.begin(),
+                           [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+            return processes.count(lowerExe) > 0;
+        }
+    case RuleType::Device:
+        {
+            return isAudioDevicePresent(devices, rule.deviceNameMatch);
+        }
+    }
+    return false;
+}
+
+
 Switcher::~Switcher()
 {
     stop();
@@ -98,7 +123,7 @@ void Switcher::forceRefresh()
 {
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        lastAppliedExe_.clear();
+        lastAppliedRuleIdx_ = -2; // sentinel: force re-evaluation (distinct from -1 = default)
         lastAppliedOutput_.clear();
         lastAppliedInput_.clear();
         refreshRequested_ = true;
@@ -138,7 +163,7 @@ void Switcher::forceDefault()
     // Update bookkeeping so the switcher loop knows what's active
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        lastAppliedExe_.clear();
+        lastAppliedRuleIdx_ = -1;
         lastAppliedOutput_ = defaultRule.outputDevice;
         lastAppliedInput_ = defaultRule.inputDevice;
         activeRule_ = "Default";
@@ -169,7 +194,7 @@ void Switcher::run()
             {
                 configDirty_ = false;
                 // Force re-evaluation by clearing last applied state
-                lastAppliedExe_.clear();
+                lastAppliedRuleIdx_ = -2;
                 lastAppliedOutput_.clear();
                 lastAppliedInput_.clear();
                 logMsg("Switcher: config reloaded");
@@ -233,22 +258,25 @@ void Switcher::run()
             continue;
         }
 
+        // Fetch audio devices once per tick (needed for Device-type rules
+        // and for applying the matched rule).
+        auto audioDevices = client_.getAudioDevices();
+
         // 3. Find the highest-priority matching rule (first match in list order)
         const Rule* matchedRule = nullptr;
-        for (const auto& rule : currentConfig.rules)
+        int matchedRuleIdx = -1;
+        for (int ruleIdx = 0; ruleIdx < static_cast<int>(currentConfig.rules.size()); ruleIdx++)
         {
-            // Skip disabled rules
+            const auto& rule = currentConfig.rules[ruleIdx];
             if (!rule.enabled)
+            {
                 continue;
+            }
 
-            // Convert exe name to lower for comparison (process list is already lowered)
-            std::string lowerExe = rule.exeName;
-            std::transform(lowerExe.begin(), lowerExe.end(), lowerExe.begin(),
-                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-
-            if (processes.count(lowerExe) > 0)
+            if (isRuleActive(rule, processes, audioDevices))
             {
                 matchedRule = &rule;
+                matchedRuleIdx = ruleIdx;
                 break;
             }
         }
@@ -260,10 +288,9 @@ void Switcher::run()
         refreshRequested_.exchange(false);
 
         const Rule& activeRule = matchedRule ? *matchedRule : currentConfig.defaultRule;
-        std::string activeExe = matchedRule ? matchedRule->exeName : std::string{};
 
         // 3. If the matched rule is the same as currently applied, skip
-        if (activeExe == lastAppliedExe_ &&
+        if (matchedRuleIdx == lastAppliedRuleIdx_ &&
             activeRule.outputDevice == lastAppliedOutput_ &&
             activeRule.inputDevice == lastAppliedInput_)
         {
@@ -278,9 +305,25 @@ void Switcher::run()
             continue;
         }
 
+        // Build a human-readable label for logging and the tooltip
+        std::string ruleLabel = "Default";
+        if (matchedRule)
+        {
+            switch (matchedRule->type)
+            {
+            case RuleType::Application:
+                ruleLabel = matchedRule->exeName + " (Application)";
+                break;
+            case RuleType::Device:
+                ruleLabel = matchedRule->deviceNameMatch + " (Device)";
+                break;
+            }
+        }
+
         // Log what we're switching to
-        logMsg("Switcher: applying rule for %s - output: \"%s\", input: \"%s\"",
-               activeExe.empty() ? "(default)" : activeExe.c_str(),
+        logMsg("Switcher: applying rule [%d] %s - output: \"%s\", input: \"%s\"",
+               matchedRuleIdx,
+               ruleLabel.c_str(),
                activeRule.outputDevice.c_str(),
                activeRule.inputDevice.c_str());
 
@@ -288,14 +331,14 @@ void Switcher::run()
         applyRule(activeRule, currentMode.value());
 
         // Remember what we applied
-        lastAppliedExe_ = activeExe;
+        lastAppliedRuleIdx_ = matchedRuleIdx;
         lastAppliedOutput_ = activeRule.outputDevice;
         lastAppliedInput_ = activeRule.inputDevice;
 
         // Update active profile name and notify UI
         {
             std::lock_guard<std::mutex> lock(mutex_);
-            activeRule_ = activeExe.empty() ? "Default" : activeExe;
+            activeRule_ = ruleLabel;
             if (notifyHwnd_)
                 PostMessageW(notifyHwnd_, WM_RULE_CHANGED, 0, 0);
         }
@@ -315,7 +358,6 @@ void Switcher::run()
 
 void Switcher::applyRule(const Rule& rule, const std::string& mode)
 {
-    // Fetch audio devices from Sonar
     auto devices = client_.getAudioDevices();
     if (devices.empty())
     {
@@ -325,58 +367,66 @@ void Switcher::applyRule(const Rule& rule, const std::string& mode)
 
     logMsg("Switcher: mode is '%s', found %d audio devices", mode.c_str(), static_cast<int>(devices.size()));
 
-    // Resolve output device
-    if (!rule.outputDevice.empty())
+    applyOutputDevice(devices, rule.outputDevice, mode);
+    applyInputDevice(devices, rule.inputDevice, mode);
+}
+
+void Switcher::applyOutputDevice(const std::vector<AudioDevice>& devices, const std::string& outputDeviceName,
+                                 const std::string& mode)
+{
+    if (outputDeviceName.empty())
     {
-        auto outputId = findDeviceId(devices, rule.outputDevice, "render");
-        if (outputId.has_value())
-        {
-            logMsg("Switcher: resolved output \"%s\" -> %s", rule.outputDevice.c_str(), outputId.value().c_str());
-            if (mode == "classic")
-            {
-                // Classic mode has separate channels — set them all
-                static const char* renderChannels[] = {
-                    "master", "game", "chatRender", "media", "aux"
-                };
-                for (const auto* channel : renderChannels)
-                {
-                    if (!client_.setClassicDevice(channel, outputId.value()))
-                    {
-                        logMsg("Switcher: failed to set classic channel '%s'", channel);
-                    }
-                }
-            }
-            else
-            {
-                // Stream mode: only change monitoring device, never touch streaming
-                client_.setMonitoringDevice(outputId.value());
-            }
-        }
-        else
-        {
-            logMsg("Switcher: no render device matching \"%s\"", rule.outputDevice.c_str());
-        }
+        return;
     }
 
-    // Resolve input device
-    if (!rule.inputDevice.empty())
+    auto outputId = findDeviceId(devices, outputDeviceName, "render");
+    if (!outputId.has_value())
     {
-        auto inputId = findDeviceId(devices, rule.inputDevice, "capture");
-        if (inputId.has_value())
+        logMsg("Switcher: no render device matching \"%s\"", outputDeviceName.c_str());
+        return;
+    }
+
+    logMsg("Switcher: resolved output \"%s\" -> %s", outputDeviceName.c_str(), outputId.value().c_str());
+
+    if (mode != "classic")
+    {
+        // Stream mode: only change monitoring device, never touch streaming
+        client_.setMonitoringDevice(outputId.value());
+        return;
+    }
+
+    // Classic mode has separate channels — set them all
+    static const char* renderChannels[] = {"master", "game", "chatRender", "media", "aux"};
+    for (const auto* channel : renderChannels)
+    {
+        if (!client_.setClassicDevice(channel, outputId.value()))
         {
-            if (mode == "classic")
-            {
-                client_.setChatCaptureDevice(inputId.value());
-            }
-            else
-            {
-                // Stream mode: use streamRedirections/mic endpoint
-                client_.setStreamMicDevice(inputId.value());
-            }
-        }
-        else
-        {
-            logMsg("Switcher: no capture device matching \"%s\"", rule.inputDevice.c_str());
+            logMsg("Switcher: failed to set classic channel '%s'", channel);
         }
     }
+}
+
+void Switcher::applyInputDevice(const std::vector<AudioDevice>& devices, const std::string& inputDeviceName,
+                                const std::string& mode)
+{
+    if (inputDeviceName.empty())
+    {
+        return;
+    }
+
+    auto inputId = findDeviceId(devices, inputDeviceName, "capture");
+    if (!inputId.has_value())
+    {
+        logMsg("Switcher: no capture device matching \"%s\"", inputDeviceName.c_str());
+        return;
+    }
+
+    if (mode != "classic")
+    {
+        // Stream mode: use streamRedirections/mic endpoint
+        client_.setStreamMicDevice(inputId.value());
+        return;
+    }
+
+    client_.setChatCaptureDevice(inputId.value());
 }
