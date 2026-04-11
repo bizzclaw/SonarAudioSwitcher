@@ -44,7 +44,7 @@ Define rules like "when `vrserver.exe` is running, switch output to my VR headse
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/SonarAudioSwitcher.git
+git clone https://github.com/bizzclaw/SonarAudioSwitcher
 cd SonarAudioSwitcher
 
 # Configure
